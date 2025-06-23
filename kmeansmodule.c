@@ -4,6 +4,12 @@
 #include <stdlib.h>
 #include <string.h>  /* for strtok, allowed as per forum */
 #include <math.h>
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
+
+
+/* KMeans algorithm declaration (from your C implementation) */
+double** kmeans(double** points, int N, int d, int K, int iter, double epsilon);
 
 /* Declare getline prototype for ANSI C */
 ssize_t getline(char **lineptr, size_t *n, FILE *stream);
@@ -357,4 +363,94 @@ double** kmeans(double** points, int N, int d, int K, int iter, double epsilon) 
     }
 
     return centroids;
+}
+
+
+
+/* Free a 2D array */
+static void free_c_array(double **array, int n) {
+    for (int i = 0; i < n; i++) {
+        free(array[i]);
+    }
+    free(array);
+}
+
+/* Python wrapper for kmeans */
+static PyObject* fit(PyObject *self, PyObject *args) {
+    PyObject *points_obj, *initial_obj;
+    int max_iter;
+
+    if (!PyArg_ParseTuple(args, "OOi", &points_obj, &initial_obj, &max_iter)) {
+        return NULL;
+    }
+
+    int N = PyList_Size(points_obj);
+    int K = PyList_Size(initial_obj);
+    if (N == 0 || K == 0) {
+        PyErr_SetString(PyExc_ValueError, "Empty input lists");
+        return NULL;
+    }
+
+    int d = PyList_Size(PyList_GetItem(points_obj, 0));
+
+    double **points = malloc(N * sizeof(double*));
+    double **initial = malloc(K * sizeof(double*));
+
+    for (int i = 0; i < N; i++) {
+        PyObject *p = PyList_GetItem(points_obj, i);
+        points[i] = malloc(d * sizeof(double));
+        for (int j = 0; j < d; j++) {
+            points[i][j] = PyFloat_AsDouble(PyList_GetItem(p, j));
+        }
+    }
+
+    for (int i = 0; i < K; i++) {
+        PyObject *c = PyList_GetItem(initial_obj, i);
+        initial[i] = malloc(d * sizeof(double));
+        for (int j = 0; j < d; j++) {
+            initial[i][j] = PyFloat_AsDouble(PyList_GetItem(c, j));
+        }
+    }
+
+    double epsilon = 0.001;
+    double **final_centroids = kmeans(points, N, d, K, max_iter, epsilon);
+
+    if (!final_centroids) {
+        free_c_array(points, N);
+        free_c_array(initial, K);
+        PyErr_SetString(PyExc_RuntimeError, "KMeans failed");
+        return NULL;
+    }
+
+    PyObject *result = PyList_New(K);
+    for (int i = 0; i < K; i++) {
+        PyObject *centroid = PyList_New(d);
+        for (int j = 0; j < d; j++) {
+            PyList_SetItem(centroid, j, PyFloat_FromDouble(final_centroids[i][j]));
+        }
+        PyList_SetItem(result, i, centroid);
+    }
+
+    free_c_array(points, N);
+    free_c_array(initial, K);
+    free_c_array(final_centroids, K);
+
+    return result;
+}
+
+static PyMethodDef KMeansMethods[] = {
+    {"fit", fit, METH_VARARGS, "Run the KMeans algorithm."},
+    {NULL, NULL, 0, NULL}
+};
+
+static struct PyModuleDef kmeansmodule = {
+    PyModuleDef_HEAD_INIT,
+    "kmeansmodule",
+    NULL,
+    -1,
+    KMeansMethods
+};
+
+PyMODINIT_FUNC PyInit_kmeansmodule(void) {
+    return PyModule_Create(&kmeansmodule);
 }

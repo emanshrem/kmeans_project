@@ -378,24 +378,23 @@ static void free_c_array(double **array, int n) {
 /* Python wrapper for kmeans */
 static PyObject* fit(PyObject *self, PyObject *args) {
     PyObject *points_obj, *initial_obj;
-    int max_iter;
+    int max_iter, N, d;
+    double epsilon;
 
-    if (!PyArg_ParseTuple(args, "OOi", &points_obj, &initial_obj, &max_iter)) {
+    if (!PyArg_ParseTuple(args, "OOidii", &points_obj, &initial_obj, &max_iter, &epsilon, &N, &d)) {
         return NULL;
     }
 
-    int N = PyList_Size(points_obj);
+    if (N == 0) {
+        PyErr_SetString(PyExc_ValueError, "Empty input lists"); // we handle in python already may delete this
+        return NULL;
+    }
+
     int K = PyList_Size(initial_obj);
-    if (N == 0 || K == 0) {
-        PyErr_SetString(PyExc_ValueError, "Empty input lists");
-        return NULL;
-    }
-
-    int d = PyList_Size(PyList_GetItem(points_obj, 0));
 
     double **points = malloc(N * sizeof(double*));
     double **initial = malloc(K * sizeof(double*));
-
+    //convert Python lists to C arrays
     for (int i = 0; i < N; i++) {
         PyObject *p = PyList_GetItem(points_obj, i);
         points[i] = malloc(d * sizeof(double));
@@ -403,7 +402,7 @@ static PyObject* fit(PyObject *self, PyObject *args) {
             points[i][j] = PyFloat_AsDouble(PyList_GetItem(p, j));
         }
     }
-
+    //convert Python lists to C arrays
     for (int i = 0; i < K; i++) {
         PyObject *c = PyList_GetItem(initial_obj, i);
         initial[i] = malloc(d * sizeof(double));
@@ -412,7 +411,6 @@ static PyObject* fit(PyObject *self, PyObject *args) {
         }
     }
 
-    double epsilon = 0.001;
     double **final_centroids = kmeans(points, N, d, K, max_iter, epsilon);
 
     if (!final_centroids) {
@@ -422,13 +420,13 @@ static PyObject* fit(PyObject *self, PyObject *args) {
         return NULL;
     }
 
-    PyObject *result = PyList_New(K);
-    for (int i = 0; i < K; i++) {
+    PyObject *result = PyList_New(K); //Creates a new Python list with K elements, initialized to NULL.
+    for (int i = 0; i < K; i++) { //For each centroid i, create a new Python list of length d.
         PyObject *centroid = PyList_New(d);
         for (int j = 0; j < d; j++) {
-            PyList_SetItem(centroid, j, PyFloat_FromDouble(final_centroids[i][j]));
+            PyList_SetItem(centroid, j, PyFloat_FromDouble(final_centroids[i][j])); //For each coordinate j in centroid i, convert the C double to a Python float.
         }
-        PyList_SetItem(result, i, centroid);
+        PyList_SetItem(result, i, centroid); //Once the full centroid list is built, insert it into the outer list result at index i.
     }
 
     free_c_array(points, N);
@@ -438,7 +436,7 @@ static PyObject* fit(PyObject *self, PyObject *args) {
     return result;
 }
 
-static PyMethodDef KMeansMethods[] = {
+static PyMethodDef KMeansMethods[] = {Add commentMore actions
     {"fit", fit, METH_VARARGS, "Run the KMeans algorithm."},
     {NULL, NULL, 0, NULL}
 };

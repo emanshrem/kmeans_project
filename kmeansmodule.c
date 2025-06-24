@@ -9,138 +9,8 @@
 
 
 /* KMeans algorithm declaration (from your C implementation) */
-double** kmeans(double** points, int N, int d, int K, int iter, double epsilon);
+double** kmeans(double** points, int N, int d, int K, int iter, double epsilon, double** centroids);
 
-/* Declare getline prototype for ANSI C */
-ssize_t getline(char **lineptr, size_t *n, FILE *stream);
-
-/* --- Function declarations omitted for brevity --- */
-
-/* Loads points from stdin dynamically, sets *num_points and *dimension */
-double** load_points_from_stdin(int* num_points, int* dimension) {
-    char* line = NULL;
-    size_t len = 0;
-    ssize_t read;
-    int capacity;
-    double** points;
-    int dim_count;
-    int i, idx;
-    double** temp;
-    char* token;
-
-    capacity = 10;  /* Initial capacity, grows dynamically if needed */
-
-    points = malloc(capacity * sizeof(double*));
-    if (!points) {
-        printf("An Error Has Occurred!");
-        exit(1);
-    }
-
-    *num_points = 0;
-    *dimension = 0;
-
-    while ((read = getline(&line, &len, stdin)) != -1) {
-        /* Remove trailing newline if present */
-        if (read > 0 && line[read - 1] == '\n') {
-            line[read - 1] = '\0';
-        }
-
-        /* Count commas to find number of dimensions = commas + 1 */
-        dim_count = 1;
-        for (i = 0; line[i]; i++) {
-            if (line[i] == ',') dim_count++;
-        }
-
-        /* On first line, set dimension and allocate accordingly */
-        if (*num_points == 0) {
-            *dimension = dim_count;
-        } else {
-            /* Dimension consistency check (optional per HW notes) */
-            if (dim_count != *dimension) {
-                printf("An Error Has Occurred!");
-                free(line);
-                for (i = 0; i < *num_points; i++) free(points[i]);
-                free(points);
-                exit(1);
-            }
-        }
-
-        /* Resize points array if capacity reached */
-        if (*num_points >= capacity) {
-            capacity *= 2;
-            temp = realloc(points, capacity * sizeof(double*));
-            if (!temp) {
-                printf("An Error Has Occurred!");
-                free(line);
-                for (i = 0; i < *num_points; i++) free(points[i]);
-                free(points);
-                exit(1);
-            }
-            points = temp;
-        }
-
-        /* Allocate space for current point's coordinates */
-        points[*num_points] = malloc((*dimension) * sizeof(double));
-        if (!points[*num_points]) {
-            printf("An Error Has Occurred!");
-            free(line);
-            for (i = 0; i < *num_points; i++) free(points[i]);
-            free(points);
-            exit(1);
-        }
-
-        /* Parse coordinates using strtok and atof */
-        token = strtok(line, ",");
-        idx = 0;
-        while (token != NULL) {
-            points[*num_points][idx++] = atof(token);
-            token = strtok(NULL, ",");
-        }
-
-        (*num_points)++;  /* Increment number of points loaded */
-    }
-
-    free(line);  /* Free buffer allocated by getline */
-    return points;  /* Caller is responsible to free points array and all its rows */
-}
-
-/* Initialize centroids as a deep copy of the first K points (caller frees) */
-double** initialize_centroids(double** points, int K, int d, int N) {
-    double **copy;
-    int i, j;
-
-    copy = malloc(K * sizeof(double*));
-    if (!copy) {
-        printf("An Error Has Occurred!");
-        /* Free points before exiting */
-        for (i = 0; i < N; i++) {
-            free(points[i]);
-        }
-        free(points);
-        exit(1);
-    }
-
-    for (i = 0; i < K; i++) {
-        copy[i] = malloc(d * sizeof(double));
-        if (!copy[i]) {
-            printf("An Error Has Occurred!");
-            /* Free previously allocated before exiting */
-            for (j = 0; j < i; j++) free(copy[j]);
-            free(copy);
-                    /* Free points before exiting */
-            for (i = 0; i < N; i++) {
-                free(points[i]);
-            }
-            free(points);
-            exit(1);
-        }
-        for (j = 0; j < d; j++) {
-            copy[i][j] = points[i][j];
-        }
-    }
-
-    return copy;
-}
 
 /* Euclidean distance between two points in d-dimensional space */
 double dist(double* p, double* q, int d) {
@@ -155,18 +25,6 @@ double dist(double* p, double* q, int d) {
     return sqrt(sum);
 }
 
-/* Print K centroids with 4 decimals, comma separated (no spaces) */
-void print_centroids(double** centroids, int K, int d) {
-    int i, j;
-
-    for (i = 0; i < K; i++) {
-        for (j = 0; j < d; j++) {
-            printf("%.4f", centroids[i][j]);
-            if (j < d - 1) printf(",");
-        }
-        printf("\n");
-    }
-}
 
 /* Assign each point to the closest centroid, returns allocated int array (caller frees) */
 int* assign_clusters(double** points, double** centroids, int K, int d, int N) {
@@ -313,30 +171,11 @@ void free_points(double** points, int n) {
 }
 
 
-int is_valid_integer_string(const char *s) {
-    char *endptr;
-    double val;
-    
 
-    val = strtod(s, &endptr);
-    if (*endptr != '\0') {
-        return 0;
-    }
-    return floor(val) == val;
-}
-
-double** kmeans(double** points, int N, int d, int K, int iter, double epsilon) {
-    double** centroids;
+double** kmeans(double** points, int N, int d, int K, int iter, double epsilon, double** centroids) {
     int* cluster_indices;
     double** new_centroids;
     int i, j;
-
-    if (!(1 < K && K < N)) {
-        return NULL;  // invalid number of clusters
-    }
-
-    centroids = initialize_centroids(points, K, d, N);
-    if (!centroids) return NULL;  // error already handled in helper
 
     for (i = 0; i < iter; i++) {
         cluster_indices = assign_clusters(points, centroids, K, d, N);
@@ -365,15 +204,21 @@ double** kmeans(double** points, int N, int d, int K, int iter, double epsilon) 
     return centroids;
 }
 
-
-
-/* Free a 2D array */
-static void free_c_array(double **array, int n) {
-    for (int i = 0; i < n; i++) {
-        free(array[i]);
+/* Helper to allocate 2D array */
+double** allocate_2d_double(int rows, int cols) {
+    double **array = malloc(rows * sizeof(double*));
+    if (!array) return NULL;
+    for (int i = 0; i < rows; i++) {
+        array[i] = malloc(cols * sizeof(double));
+        if (!array[i]) {
+            for (int j = 0; j < i; j++) free(array[j]);
+            free(array);
+            return NULL;
+        }
     }
-    free(array);
+    return array;
 }
+
 
 /* Python wrapper for kmeans */
 static PyObject* fit(PyObject *self, PyObject *args) {
@@ -385,38 +230,65 @@ static PyObject* fit(PyObject *self, PyObject *args) {
         return NULL;
     }
 
-    if (N == 0) {
-        PyErr_SetString(PyExc_ValueError, "Empty input lists"); // we handle in python already may delete this
+    int K = PyList_Size(initial_obj);
+
+    double **points = allocate_2d_double(N, d);
+    double **initial = allocate_2d_double(K, d);
+    if (!points || !initial) {
+        free_points(points, N);
+        free_points(initial, K);
+        PyErr_SetString(PyExc_MemoryError, "An Error Has Occurred!");
         return NULL;
     }
 
-    int K = PyList_Size(initial_obj);
-
-    double **points = malloc(N * sizeof(double*));
-    double **initial = malloc(K * sizeof(double*));
-    //convert Python lists to C arrays
+        // Convert Python points to C array
     for (int i = 0; i < N; i++) {
-        PyObject *p = PyList_GetItem(points_obj, i);
-        points[i] = malloc(d * sizeof(double));
+        PyObject* point = PyList_GetItem(points_obj, i);
+        if (!point) {
+            free_points(points, N);
+            free_points(initial_obj, K);
+            PyErr_SetString(PyExc_RuntimeError, "An Error Has Occurred!");
+            return NULL;
+        }
         for (int j = 0; j < d; j++) {
-            points[i][j] = PyFloat_AsDouble(PyList_GetItem(p, j));
+            PyObject* coord = PyList_GetItem(point, j);
+            if (!coord) {
+                free_points(points, N);
+                free_points(initial_obj, K);
+                PyErr_SetString(PyExc_RuntimeError, "An Error Has Occurred!");
+                return NULL;
+            }
+            points[i][j] = PyFloat_AsDouble(coord);
         }
     }
-    //convert Python lists to C arrays
+    // Convert Python initial centroids to C array
     for (int i = 0; i < K; i++) {
-        PyObject *c = PyList_GetItem(initial_obj, i);
-        initial[i] = malloc(d * sizeof(double));
+        PyObject* centroid = PyList_GetItem(initial_obj, i);
+        if (!centroid) {
+            free_points(points, N);
+            free_points(initial, K);
+            PyErr_SetString(PyExc_RuntimeError, "An Error Has Occurred!");
+            return NULL;
+        }
         for (int j = 0; j < d; j++) {
-            initial[i][j] = PyFloat_AsDouble(PyList_GetItem(c, j));
+            PyObject* coord = PyList_GetItem(centroid, j);
+            if (!coord) {
+                free_points(points, N);
+                free_points(initial, K);
+                PyErr_SetString(PyExc_RuntimeError, "An Error Has Occurred!");
+                return NULL;
+            }
+            initial[i][j] = PyFloat_AsDouble(coord);
         }
     }
 
-    double **final_centroids = kmeans(points, N, d, K, max_iter, epsilon);
+
+    double **final_centroids = kmeans(points, N, d, K, max_iter, epsilon, initial);
 
     if (!final_centroids) {
-        free_c_array(points, N);
-        free_c_array(initial, K);
-        PyErr_SetString(PyExc_RuntimeError, "KMeans failed");
+        free_points(points, N);
+        free_points(initial, K);
+        PyErr_SetString(PyExc_RuntimeError, "An Error Has Occurred!");
         return NULL;
     }
 
@@ -429,26 +301,28 @@ static PyObject* fit(PyObject *self, PyObject *args) {
         PyList_SetItem(result, i, centroid); //Once the full centroid list is built, insert it into the outer list result at index i.
     }
 
-    free_c_array(points, N);
-    free_c_array(initial, K);
-    free_c_array(final_centroids, K);
+    free_points(points, N);
+    free_points(final_centroids, K);
 
     return result;
 }
 
-static PyMethodDef KMeansMethods[] = {Add commentMore actions
-    {"fit", fit, METH_VARARGS, "Run the KMeans algorithm."},
+static PyMethodDef KMeansMethods[] = {
+    {"fit",
+      (PyCFunction)fit,
+      METH_VARARGS,
+      "Run the KMeans algorithm."},
     {NULL, NULL, 0, NULL}
 };
 
 static struct PyModuleDef kmeansmodule = {
     PyModuleDef_HEAD_INIT,
-    "kmeansmodule",
+    "mykmeanspp",
     NULL,
     -1,
     KMeansMethods
 };
 
-PyMODINIT_FUNC PyInit_kmeansmodule(void) {
+PyMODINIT_FUNC PyInit_mykmeanspp(void) {
     return PyModule_Create(&kmeansmodule);
 }

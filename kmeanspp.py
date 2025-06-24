@@ -1,6 +1,7 @@
 import sys
 import numpy as np
-import kmeansmodule  # The C extension module you compiled
+import pandas as pd
+import mykmeanspp # The C extension module you compiled
 
 def convert_to_int(val):
     try:
@@ -17,26 +18,25 @@ def convert_to_float(val):
 def is_valid_file(filename):
     return filename.endswith(".txt") or filename.endswith(".csv")
 
-def load_and_join(file1, file2, delimiter=','): #MakeSure??
+def load_and_join(file1, file2, delimiter=',', has_header=False): #MakeSure??
     """Loads and joins two input files on their first column (IDs) using inner join."""
-    data1 = np.loadtxt(file1, delimiter=delimiter)
-    data2 = np.loadtxt(file2, delimiter=delimiter)
+    header_option = 0 if has_header else None
 
-    ids1 = data1[:, 0]
-    ids2 = data2[:, 0]
+    # Load files
+    df1 = pd.read_csv(file1, delimiter=delimiter, header=header_option)
+    df2 = pd.read_csv(file2, delimiter=delimiter, header=header_option)
 
-    common_ids = np.intersect1d(ids1, ids2)
+    # Rename first column to 'key' for merging
+    df1 = df1.rename(columns={df1.columns[0]: 'key'})
+    df2 = df2.rename(columns={df2.columns[0]: 'key'})
 
-    filtered1 = data1[np.isin(ids1, common_ids)]
-    filtered2 = data2[np.isin(ids2, common_ids)]
+    # Perform inner join on 'key'
+    merged = pd.merge(df1, df2, on='key')
 
-    # Sort both by ID
-    filtered1 = filtered1[np.argsort(filtered1[:, 0])]
-    filtered2 = filtered2[np.argsort(filtered2[:, 0])]
-    common_ids = np.sort(common_ids)
+    # Sort by 'key'
+    merged = merged.sort_values(by='key').reset_index(drop=True)
 
-    combined_features = np.hstack((filtered1[:, 1:], filtered2[:, 1:]))
-    return common_ids, combined_features
+    return merged
 
 def kmeans_pp_init(points, ids, k):
     """Initialize centroids using K-means++ algorithm."""
@@ -117,13 +117,14 @@ def main():
     initial_centroids, chosen_ids = kmeans_pp_init(points, ids, k)
 
     # Run the C extension
-    final_centroids = kmeansmodule.fit(
+    final_centroids = mykmeanspp.fit(
         points.tolist(),
         initial_centroids.tolist(),
         max_iter,
         eps,
         len(points),             # N
-        len(points[0])   )        # dim
+        len(points[0])           # dim
+    )
 
     # Output
     print(",".join(map(str, chosen_ids)))

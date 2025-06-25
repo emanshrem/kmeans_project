@@ -5,21 +5,36 @@ import mykmeanspp # The C extension module you compiled
 
 def convert_to_int(val):
     try:
-        return int(float(val))  # Handles "3", "3.0", "03"
+        f = float(val)
+        if f.is_integer():  # Checks if float is whole number, e.g. 3.0 but not 3.4
+            return int(f)
+        else:
+            return None
     except:
         return None
 
-def convert_to_float(val):
+def convert_to_float(val, epsilon=0.01):
     try:
-        return float(val)
+        f = float(val)
+        if 0 <= f <= epsilon:
+            return 0.0
+        elif f > epsilon:
+            return f
+        else:  # negative values
+            return None
     except:
         return None
+
 
 def is_valid_file(filename):
     return filename.endswith(".txt") or filename.endswith(".csv")
 
-def load_and_join(file1, file2, delimiter=',', has_header=False): #MakeSure??
-    """Loads and joins two input files on their first column (IDs) using inner join."""
+def load_and_join(file1, file2, delimiter=',', has_header=False):
+    """
+    Loads and joins two input files on their first column (IDs) using inner join.
+    Returns (ids, points) where ids is a list of IDs and points is np.array of floats.
+    """
+
     header_option = 0 if has_header else None
 
     # Load files
@@ -31,12 +46,19 @@ def load_and_join(file1, file2, delimiter=',', has_header=False): #MakeSure??
     df2 = df2.rename(columns={df2.columns[0]: 'key'})
 
     # Perform inner join on 'key'
-    merged = pd.merge(df1, df2, on='key')
+    merged = pd.merge(df1, df2, on='key', how='inner')
 
     # Sort by 'key'
     merged = merged.sort_values(by='key').reset_index(drop=True)
 
-    return merged
+    # Extract IDs as list
+    ids = merged['key'].tolist()
+
+    # Drop the ID column and convert remaining columns to numpy float array
+    points = merged.drop(columns=['key']).to_numpy(dtype=float)
+
+    return ids, points
+
 
 def kmeans_pp_init(points, ids, k):
     """Initialize centroids using K-means++ algorithm."""
@@ -51,7 +73,7 @@ def kmeans_pp_init(points, ids, k):
 
     for _ in range(1, k):
         dists = np.array([
-            min(np.sum((point - centroid) ** 2) for centroid in centroids)
+            min(np.sqrt(np.sum((point - centroid) ** 2)) for centroid in centroids)
             for point in points
         ])
         probs = dists / np.sum(dists) #we won't choose the same centroid more than once! cuz dist will be 0 and prob will be 0
@@ -84,23 +106,23 @@ def main():
         
     if None in [k, max_iter, eps]:
         if k is None:
-            print("invalid number of clusters!")
+            print("Invalid number of clusters!")
 
         elif max_iter is None:
-            print("invalid maximum iteration!")
+            print("Invalid maximum iteration!")
 
         elif eps is None:
-            print("invalid epsilon!")
+            print("Invalid epsilon!")
         sys.exit(1)
 
     if not (1 < k):
-        print("invalid number of clusters!")
+        print("Invalid number of clusters!")
         sys.exit(1)
     if not (1 < max_iter < 1000):
-        print("invalid maximum iteration!")
+        print("Invalid maximum iteration!")
         sys.exit(1)
     if eps < 0:
-        print("invalid epsilon!")
+        print("Invalid epsilon!")
         sys.exit(1)
     if not (is_valid_file(file1) and is_valid_file(file2)):
         print("An Error Has Occurred")
@@ -110,7 +132,7 @@ def main():
     ids, points = load_and_join(file1, file2) #ids are the first column(dims) in each point
 
     if k >= len(points):
-        print("invalid number of clusters!")
+        print("Invalid number of clusters!")
         sys.exit(1)
 
     # Initialize centroids
@@ -127,7 +149,7 @@ def main():
     )
 
     # Output
-    print(",".join(map(str, chosen_ids)))
+    print(",".join(str(int(x)) for x in chosen_ids))
     for centroid in final_centroids:
         print(",".join([f"{coord:.4f}" for coord in centroid]))
 

@@ -13,21 +13,14 @@ def convert_to_int(val):
     except:
         return None
 
-def convert_to_float(val, epsilon=0.01):
+def convert_to_float(val):
     try:
         f = float(val)
-        if 0 <= f <= epsilon:
-            return 0.0
-        elif f > epsilon:
-            return f
-        else:  # negative values
-            return None
+        return f if f >= 0 else None
     except:
         return None
 
 
-def is_valid_file(filename):
-    return filename.endswith(".txt") or filename.endswith(".csv")
 
 def load_and_join(file1, file2, delimiter=',', has_header=False):
     """
@@ -56,8 +49,12 @@ def load_and_join(file1, file2, delimiter=',', has_header=False):
 
     # Drop the ID column and convert remaining columns to numpy float array
     points = merged.drop(columns=['key']).to_numpy(dtype=float)
+    if merged.empty:
+        print("An Error Has Occurred!")
+        sys.exit(1)
 
     return ids, points
+
 
 
 def kmeans_pp_init(points, ids, k):
@@ -90,7 +87,7 @@ def main():
 
     if not (4 <= len(args) <= 5):
         print("An Error Has Occurred")
-        sys.exit(1)
+        return 1
 
     k = convert_to_int(args[0])
     if len(args) == 4:
@@ -113,45 +110,48 @@ def main():
 
         elif eps is None:
             print("Invalid epsilon!")
-        sys.exit(1)
+        return 1 
 
     if not (1 < k):
         print("Invalid number of clusters!")
-        sys.exit(1)
+        return 1
     if not (1 < max_iter < 1000):
         print("Invalid maximum iteration!")
-        sys.exit(1)
+        return 1
     if eps < 0:
         print("Invalid epsilon!")
-        sys.exit(1)
-    if not (is_valid_file(file1) and is_valid_file(file2)):
-        print("An Error Has Occurred")
-        sys.exit(1)
+        return 1
 
     # Load and join data
     ids, points = load_and_join(file1, file2) #ids are the first column(dims) in each point
 
     if k >= len(points):
         print("Invalid number of clusters!")
-        sys.exit(1)
+        return 1
 
     # Initialize centroids
     initial_centroids, chosen_ids = kmeans_pp_init(points, ids, k)
 
+    try:
     # Run the C extension
-    final_centroids = mykmeanspp.fit(
-        points.tolist(),
-        initial_centroids.tolist(),
-        max_iter,
-        eps,
-        len(points),             # N
-        len(points[0])           # dim
-    )
+        final_centroids = mykmeanspp.fit(
+            points.tolist(),
+            initial_centroids.tolist(),
+            max_iter,
+            eps,
+            len(points),             # N
+            len(points[0])           # dim
+        )
+    except Exception:
+        print("An Error Has Occurred!")
+        return 1  # or return 1 if inside a function
+
 
     # Output
     print(",".join(str(int(x)) for x in chosen_ids))
     for centroid in final_centroids:
         print(",".join([f"{coord:.4f}" for coord in centroid]))
+    return 0  # or return 0 if inside a function
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
